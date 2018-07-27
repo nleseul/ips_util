@@ -1,4 +1,3 @@
-
 class Patch:
     def __init__(self):
         self.records = []
@@ -31,3 +30,14 @@ class Patch:
         encoded_bytes += 'EOF'.encode('ascii')
 
         return encoded_bytes
+
+    def apply(self, in_data):
+        out_data = bytearray(in_data)
+
+        for record in self.records:
+            if 'rle_count' in record:
+                out_data[record['address'] : record['address'] + record['rle_count']] = b''.join([record['data']] * record['rle_count'])
+            else:
+                out_data[record['address'] : record['address'] + len(record['data'])] = record['data']
+
+        return out_data
