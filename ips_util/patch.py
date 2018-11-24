@@ -1,4 +1,34 @@
 class Patch:
+    @staticmethod
+    def load(filename):
+        loaded_patch = Patch()
+
+        with open(filename, 'rb') as file:
+
+            header = file.read(5)
+            if header != 'PATCH'.encode('ascii'):
+                raise Exception('Not a valid IPS patch file!')
+            while True:
+                address_bytes = file.read(3)
+                if address_bytes == 'EOF'.encode('ascii'):
+                    break
+                address = int.from_bytes(address_bytes, byteorder='big')
+
+                length = int.from_bytes(file.read(2), byteorder='big')
+                rle_count = 0
+                if length == 0:
+                    rle_count = int.from_bytes(file.read(2), byteorder='big')
+                    length = 1
+                data = file.read(length)
+
+                if rle_count > 0:
+                    loaded_patch.add_rle_record(address, data, rle_count)
+                else:
+                    loaded_patch.add_record(address, data)
+
+        return loaded_patch
+
+
     def __init__(self):
         self.records = []
 

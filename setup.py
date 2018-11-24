@@ -7,4 +7,7 @@ setup(name='ips_util',
     author='NLeseul',
     license='Unlicense',
     packages=['ips_util'],
+    entry_points = {
+        'console_scripts': ['ips_util=ips_util.command_line:main'],
+    },
     zip_safe=False)
