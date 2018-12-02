@@ -19,6 +19,8 @@ def cmd_apply(args):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.prog = 'ips_util'
+    parser.description = 'Utilities for working with IPS (International Patching System) patch files.'
 
     subparsers = parser.add_subparsers(help='Specify a command.')
 
@@ -36,3 +38,5 @@ def main():
     args = parser.parse_args()
     args.func(args)
 
+if __name__ == '__main__':
+    main()

@@ -8,6 +8,7 @@ setup(name='ips_util',
     license='Unlicense',
     packages=['ips_util'],
     entry_points = {
-        'console_scripts': ['ips_util=ips_util.command_line:main'],
+        'console_scripts': ['ips_util=ips_util.__main__:main'],
     },
+    python_requires='>=3.6',
     zip_safe=False)
