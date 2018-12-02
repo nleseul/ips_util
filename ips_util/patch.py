@@ -1,3 +1,5 @@
+import itertools
+
 class Patch:
     @staticmethod
     def load(filename):
@@ -28,6 +30,51 @@ class Patch:
 
         return loaded_patch
 
+    @staticmethod
+    def create(original_data, patched_data):
+        patch = Patch()
+
+        run_in_progress = False
+        current_run_start = 0
+        current_run_data = bytearray()
+
+        runs = []
+
+        for index, (original, patched) in enumerate(zip(original_data, patched_data)):
+            if not run_in_progress:
+                if original != patched:
+                    run_in_progress = True
+                    current_run_start = index
+                    current_run_data = bytearray([patched])
+            else:
+                if original == patched:
+                    runs.append((current_run_start, current_run_data))
+                    run_in_progress = False
+                else:
+                    current_run_data.append(patched)
+        if run_in_progress:
+            runs.append((current_run_start, current_run_data))
+
+        for start, data in runs:
+            record_in_progress = bytearray()
+            pos = start
+            for key, group in itertools.groupby(data):
+                size = sum(1 for _ in group)
+                if size > 3:
+                    if len(record_in_progress) > 0:
+                        patch.add_record(pos, record_in_progress)
+                        pos += len(record_in_progress)
+                        record_in_progress = bytearray()
+
+
+                    patch.add_rle_record(pos, bytes([key]), size)
+                    pos += size
+                else:
+                    record_in_progress += bytes([key] * size)
+            if len(record_in_progress) > 0:
+                patch.add_record(pos, record_in_progress)
+
+        return patch
 
     def __init__(self):
         self.records = []
@@ -42,6 +89,20 @@ class Patch:
 
         record = {'address': address, 'data': data, 'rle_count': count}
         self.records.append(record)
+
+    def trace(self):
+        print('''Start   End     Size   Data
+------  ------  -----  ----''')
+        for record in self.records:
+            length = (record['rle_count'] if 'rle_count' in record else len(record['data']))
+            data = ''
+            if 'rle_count' in record:
+                data = '{0} x{1}'.format(record['data'].hex(), record['rle_count'])
+            elif len(record['data']) < 20:
+                data = record['data'].hex()
+            else:
+                data = record['data'][0:24].hex() + '...'
+            print('{0:06x}  {1:06x}  {2:>5}  {3}'.format(record['address'], record['address'] + length - 1, length, data))
 
     def encode(self):
         encoded_bytes = bytearray()
