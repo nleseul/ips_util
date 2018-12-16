@@ -32,7 +32,6 @@ def cmd_create(args):
     patch = Patch.create(source_file, target_file)
 
     if args.out_file is not None:
-        print(args.out_file)
         with open(args.out_file, 'w+b') as f:
             f.write(patch.encode())
     else:
