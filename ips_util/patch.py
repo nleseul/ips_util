@@ -32,6 +32,9 @@ class Patch:
 
     @staticmethod
     def create(original_data, patched_data):
+        # The heuristics for optimizing a patch were chosen with reference to
+        # the source code of Flips: https://github.com/Alcaro/Flips
+
         patch = Patch()
 
         run_in_progress = False
@@ -56,21 +59,39 @@ class Patch:
             runs.append((current_run_start, current_run_data))
 
         for start, data in runs:
+            grouped_byte_data = list([
+                {'val': key, 'count': sum(1 for _ in group), 'is_last': False}
+                for key,group in itertools.groupby(data)
+            ])
+
+            grouped_byte_data[-1]['is_last'] = True
+
             record_in_progress = bytearray()
             pos = start
-            for key, group in itertools.groupby(data):
-                size = sum(1 for _ in group)
-                if size > 3:
-                    if len(record_in_progress) > 0:
+
+            for group in grouped_byte_data:
+                if len(record_in_progress) > 0:
+                    # We don't want to interrupt a record in progress with a new header unless
+                    # this group is longer than two complete headers.
+                    if group['count'] > 13:
                         patch.add_record(pos, record_in_progress)
                         pos += len(record_in_progress)
                         record_in_progress = bytearray()
 
-
-                    patch.add_rle_record(pos, bytes([key]), size)
-                    pos += size
+                        patch.add_rle_record(pos, bytes([group['val']]), group['count'])
+                        pos += group['count']
+                    else:
+                        record_in_progress += bytes([group['val']] * group['count'])
+                elif (group['count'] > 3 and group['is_last']) or group['count'] > 8:
+                    # We benefit from making this an RLE record if the length is at least 8,
+                    # or the length is at least 3 and we know it to be the last part of this diff.
+                    patch.add_rle_record(pos, bytes([group['val']]), group['count'])
+                    pos += group['count']
                 else:
-                    record_in_progress += bytes([key] * size)
+                    # Just begin a new standard record.
+                    record_in_progress += bytes([group['val']] * group['count'])
+
+            # Finalize any record still in progress.
             if len(record_in_progress) > 0:
                 patch.add_record(pos, record_in_progress)
 
