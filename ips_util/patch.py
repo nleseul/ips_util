@@ -28,6 +28,10 @@ class Patch:
                 else:
                     loaded_patch.add_record(address, data)
 
+            truncate_bytes = file.read(3)
+            if len(truncate_bytes) == 3:
+                loaded_patch.set_truncate_length(int.from_bytes(truncate_bytes, byteorder='big'))
+
         return loaded_patch
 
     @staticmethod
@@ -42,6 +46,15 @@ class Patch:
         current_run_data = bytearray()
 
         runs = []
+
+        if len(original_data) > len(patched_data):
+            patch.set_truncate_length(len(patched_data))
+            original_data = original_data[:len(patched_data)]
+        elif len(original_data) < len(patched_data):
+            original_data += bytes([0] * (len(patched_data) - len(original_data)))
+
+            if original_data[-1] == 0 and patched_data[-1] == 0:
+                patch.add_record(len(patched_data) - 1, bytes([0]))
 
         for index, (original, patched) in enumerate(zip(original_data, patched_data)):
             if not run_in_progress:
@@ -99,6 +112,7 @@ class Patch:
 
     def __init__(self):
         self.records = []
+        self.truncate_length = None
 
     def add_record(self, address, data):
         record = {'address': address, 'data': data}
@@ -110,6 +124,9 @@ class Patch:
 
         record = {'address': address, 'data': data, 'rle_count': count}
         self.records.append(record)
+
+    def set_truncate_length(self, truncate_length):
+        self.truncate_length = truncate_length
 
     def trace(self):
         print('''Start   End     Size   Data
@@ -124,6 +141,10 @@ class Patch:
             else:
                 data = record['data'][0:24].hex() + '...'
             print('{0:06x}  {1:06x}  {2:>5}  {3}'.format(record['address'], record['address'] + length - 1, length, data))
+
+        if self.truncate_length is not None:
+            print()
+            print('Truncate to {0} bytes'.format(self.truncate_length))
 
     def encode(self):
         encoded_bytes = bytearray()
@@ -141,15 +162,24 @@ class Patch:
 
         encoded_bytes += 'EOF'.encode('ascii')
 
+        if self.truncate_length is not None:
+            encoded_bytes += self.truncate_length.to_bytes(3, byteorder='big')
+
         return encoded_bytes
 
     def apply(self, in_data):
         out_data = bytearray(in_data)
 
         for record in self.records:
+            if record['address'] >= len(out_data):
+                out_data += bytes([0] * (record['address'] - len(out_data) + 1))
+
             if 'rle_count' in record:
                 out_data[record['address'] : record['address'] + record['rle_count']] = b''.join([record['data']] * record['rle_count'])
             else:
                 out_data[record['address'] : record['address'] + len(record['data'])] = record['data']
+
+        if self.truncate_length is not None:
+            out_data = out_data[:self.truncate_length]
 
         return out_data

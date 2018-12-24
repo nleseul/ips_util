@@ -15,11 +15,66 @@ class TestPatch(TestCase):
         self.patch.add_rle_record(0x6, bytes([2]), 4)
 
     def test_patch_core(self):
-        result = self.patch.apply(self.source)
+        temp_patch = TestPatch.__save_and_reload(self.patch)
+
+        result = temp_patch.apply(self.source)
         self.assertEqual(result, self.target)
 
-    def test_patch_encode_decode(self):
-        encoded_patch = self.patch.encode()
+    def test_patch_padding(self):
+        self.patch.add_record(0x20, bytes([1]))
+
+        temp_patch = TestPatch.__save_and_reload(self.patch)
+        result = temp_patch.apply(self.source)
+
+        self.assertEqual(len(result), 0x21)
+
+    def test_patch_truncation(self):
+        self.patch.set_truncate_length(0x5)
+
+        temp_patch = TestPatch.__save_and_reload(self.patch)
+        result = temp_patch.apply(self.source)
+
+        self.assertEqual(len(result), 0x5)
+
+    def test_create_equal_length(self):
+        created_patch = Patch.create(self.source, self.target)
+
+        temp_patch = TestPatch.__save_and_reload(self.patch)
+        result = temp_patch.apply(self.source)
+
+        self.assertEqual(result, self.target)
+
+    def test_create_padded_length(self):
+        target_with_padding = self.target + bytes([0] * 10) + bytes([1])
+        created_patch = Patch.create(self.source, target_with_padding)
+
+        temp_patch = TestPatch.__save_and_reload(created_patch)
+        result = temp_patch.apply(self.source)
+
+        self.assertEqual(result, target_with_padding)
+
+    def test_create_padded_length_all_zero(self):
+        target_with_padding = self.target + bytes([0] * 10)
+        created_patch = Patch.create(self.source, target_with_padding)
+
+        temp_patch = TestPatch.__save_and_reload(created_patch)
+        result = temp_patch.apply(self.source)
+
+        self.assertEqual(result, target_with_padding)
+
+    def test_create_truncated_length(self):
+        target_truncated = self.target[:5]
+        created_patch = Patch.create(self.source, target_truncated)
+
+        temp_patch = TestPatch.__save_and_reload(created_patch)
+        result = temp_patch.apply(self.source)
+
+        self.assertEqual(result, target_truncated)
+
+    @staticmethod
+    def __save_and_reload(patch):
+        encoded_patch = patch.encode()
+        decoded_patch = None
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(encoded_patch)
@@ -27,7 +82,7 @@ class TestPatch(TestCase):
 
             decoded_patch = Patch.load(f.name)
 
-            result = decoded_patch.apply(self.source)
-            self.assertEqual(result, self.target)
-
             os.unlink(f.name)
+
+        return decoded_patch
+
