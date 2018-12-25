@@ -72,6 +72,10 @@ class Patch:
             runs.append((current_run_start, current_run_data))
 
         for start, data in runs:
+            if start == int.from_bytes(b'EOF', byteorder='big'):
+                start -= 1
+                data = bytes([patched_data[start - 1]]) + data
+
             grouped_byte_data = list([
                 {'val': key, 'count': sum(1 for _ in group), 'is_last': False}
                 for key,group in itertools.groupby(data)
@@ -115,12 +119,18 @@ class Patch:
         self.truncate_length = None
 
     def add_record(self, address, data):
+        if address == int.from_bytes(b'EOF', byteorder='big'):
+            raise RuntimeError('Start address {0:x} is invalid in the IPS format. Please shift your starting address back to avoid it.')
+
         record = {'address': address, 'data': data}
         self.records.append(record)
 
     def add_rle_record(self, address, data, count):
+        if address == int.from_bytes(b'EOF', byteorder='big'):
+            raise RuntimeError('Start address {0:x} is invalid in the IPS format. Please shift your starting address back to avoid it.')
+
         if len(data) != 1:
-            raise Exception('Data for RLE record must be exactly one byte! Received {0}.'.format(data))
+            raise RuntimeError('Data for RLE record must be exactly one byte! Received {0}.'.format(data))
 
         record = {'address': address, 'data': data, 'rle_count': count}
         self.records.append(record)

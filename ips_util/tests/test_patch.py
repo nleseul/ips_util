@@ -36,6 +36,28 @@ class TestPatch(TestCase):
 
         self.assertEqual(len(result), 0x5)
 
+    def test_patch_eof_edge_case(self):
+        eof_value = int.from_bytes(b'EOF', byteorder='big')
+        with self.assertRaises(RuntimeError):
+            self.patch.add_record(eof_value, bytes([1]))
+
+    def test_create_eof_edge_case(self):
+        eof_value = int.from_bytes(b'EOF', byteorder='big')
+
+        source = bytes(eof_value + 10)
+        target = bytearray(bytes(eof_value + 10))
+        target[eof_value - 1] = 2
+        target[eof_value] = 1
+
+        patch = Patch.create(source, target)
+
+        temp_patch = TestPatch.__save_and_reload(patch)
+        result = temp_patch.apply(source)
+
+        self.assertEqual(len(result), eof_value + 10)
+        self.assertEqual(result[eof_value - 1], 2)
+        self.assertEqual(result[eof_value], 1)
+
     def test_create_equal_length(self):
         created_patch = Patch.create(self.source, self.target)
 
