@@ -15,24 +15,20 @@ class TestPatch(TestCase):
         self.patch.add_rle_record(0x6, bytes([2]), 4)
 
     def test_patch_core(self):
-        temp_patch = TestPatch.__save_and_reload(self.patch)
-
-        result = temp_patch.apply(self.source)
+        result = TestPatch.__save_reload_and_apply(self.patch, self.source)
         self.assertEqual(result, self.target)
 
     def test_patch_padding(self):
         self.patch.add_record(0x20, bytes([1]))
 
-        temp_patch = TestPatch.__save_and_reload(self.patch)
-        result = temp_patch.apply(self.source)
+        result = TestPatch.__save_reload_and_apply(self.patch, self.source)
 
         self.assertEqual(len(result), 0x21)
 
     def test_patch_truncation(self):
         self.patch.set_truncate_length(0x5)
 
-        temp_patch = TestPatch.__save_and_reload(self.patch)
-        result = temp_patch.apply(self.source)
+        result = TestPatch.__save_reload_and_apply(self.patch, self.source)
 
         self.assertEqual(len(result), 0x5)
 
@@ -51,8 +47,7 @@ class TestPatch(TestCase):
 
         patch = Patch.create(source, target)
 
-        temp_patch = TestPatch.__save_and_reload(patch)
-        result = temp_patch.apply(source)
+        result = TestPatch.__save_reload_and_apply(patch, source)
 
         self.assertEqual(len(result), eof_value + 10)
         self.assertEqual(result[eof_value - 1], 2)
@@ -61,8 +56,7 @@ class TestPatch(TestCase):
     def test_create_equal_length(self):
         created_patch = Patch.create(self.source, self.target)
 
-        temp_patch = TestPatch.__save_and_reload(self.patch)
-        result = temp_patch.apply(self.source)
+        result = TestPatch.__save_reload_and_apply(self.patch, self.source)
 
         self.assertEqual(result, self.target)
 
@@ -70,8 +64,7 @@ class TestPatch(TestCase):
         target_with_padding = self.target + bytes([0] * 10) + bytes([1])
         created_patch = Patch.create(self.source, target_with_padding)
 
-        temp_patch = TestPatch.__save_and_reload(created_patch)
-        result = temp_patch.apply(self.source)
+        result = TestPatch.__save_reload_and_apply(created_patch, self.source)
 
         self.assertEqual(result, target_with_padding)
 
@@ -79,8 +72,7 @@ class TestPatch(TestCase):
         target_with_padding = self.target + bytes([0] * 10)
         created_patch = Patch.create(self.source, target_with_padding)
 
-        temp_patch = TestPatch.__save_and_reload(created_patch)
-        result = temp_patch.apply(self.source)
+        result = TestPatch.__save_reload_and_apply(created_patch, self.source)
 
         self.assertEqual(result, target_with_padding)
 
@@ -88,13 +80,39 @@ class TestPatch(TestCase):
         target_truncated = self.target[:5]
         created_patch = Patch.create(self.source, target_truncated)
 
-        temp_patch = TestPatch.__save_and_reload(created_patch)
-        result = temp_patch.apply(self.source)
+        result = TestPatch.__save_reload_and_apply(created_patch, self.source)
 
         self.assertEqual(result, target_truncated)
 
+    def test_create_address_overflow(self):
+        source = bytes([0] * 0x1000001)
+        target = bytes([0] * 0x1000000 + [1])
+
+        with self.assertRaises(RuntimeError):
+            created_patch = Patch.create(source, target)
+
+    def test_create_size_overflow(self):
+        source = bytes([n % 256 for n in range(0x10000)])
+        target = bytes([(n + 1) % 256 for n in range(0x10000)])
+
+        created_patch = Patch.create(source, target)
+
+        result = TestPatch.__save_reload_and_apply(created_patch, source)
+
+        self.assertEqual(target, result)
+
+    def test_create_rle_size_overflow(self):
+        source = bytes([0] * 0x10000)
+        target = bytes([1] * 0x10000)
+
+        created_patch = Patch.create(source, target)
+
+        result = TestPatch.__save_reload_and_apply(created_patch, source)
+
+        self.assertEqual(target, result)
+
     @staticmethod
-    def __save_and_reload(patch):
+    def __save_reload_and_apply(patch, source):
         encoded_patch = patch.encode()
         decoded_patch = None
 
@@ -106,5 +124,5 @@ class TestPatch(TestCase):
 
             os.unlink(f.name)
 
-        return decoded_patch
+        return decoded_patch.apply(source)
 

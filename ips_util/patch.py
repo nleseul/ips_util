@@ -102,11 +102,24 @@ class Patch:
                 elif (group['count'] > 3 and group['is_last']) or group['count'] > 8:
                     # We benefit from making this an RLE record if the length is at least 8,
                     # or the length is at least 3 and we know it to be the last part of this diff.
-                    patch.add_rle_record(pos, bytes([group['val']]), group['count'])
-                    pos += group['count']
+
+                    # Make sure not to overflow the maximum length. Split it up if necessary.
+                    remaining_length = group['count']
+                    while remaining_length > 0xffff:
+                        patch.add_rle_record(pos, bytes([group['val']]), 0xffff)
+                        remaining_length -= 0xffff
+                        pos += 0xffff
+
+                    patch.add_rle_record(pos, bytes([group['val']]), remaining_length)
+                    pos += remaining_length
                 else:
                     # Just begin a new standard record.
                     record_in_progress += bytes([group['val']] * group['count'])
+
+                if len(record_in_progress) > 0xffff:
+                    patch.add_record(pos, record_in_progress[:0xffff])
+                    record_in_progress = record_in_progress[0xffff:]
+                    pos += 0xffff
 
             # Finalize any record still in progress.
             if len(record_in_progress) > 0:
@@ -120,15 +133,22 @@ class Patch:
 
     def add_record(self, address, data):
         if address == int.from_bytes(b'EOF', byteorder='big'):
-            raise RuntimeError('Start address {0:x} is invalid in the IPS format. Please shift your starting address back to avoid it.')
+            raise RuntimeError('Start address {0:x} is invalid in the IPS format. Please shift your starting address back by one byte to avoid it.'.format(address))
+        if address > 0xffffff:
+            raise RuntimeError('Start address {0:x} is too large for the IPS format. Addresses must fit into 3 bytes.'.format(address))
+        if len(data) > 0xffff:
+            raise RuntimeError('Record with length {0} is too large for the IPS format. Records must be less than 65536 bytes.'.format(len(data)))
 
         record = {'address': address, 'data': data}
         self.records.append(record)
 
     def add_rle_record(self, address, data, count):
         if address == int.from_bytes(b'EOF', byteorder='big'):
-            raise RuntimeError('Start address {0:x} is invalid in the IPS format. Please shift your starting address back to avoid it.')
-
+            raise RuntimeError('Start address {0:x} is invalid in the IPS format. Please shift your starting address back by one byte to avoid it.'.format(address))
+        if address > 0xffffff:
+            raise RuntimeError('Start address {0:x} is too large for the IPS format. Addresses must fit into 3 bytes.'.format(address))
+        if count > 0xffff:
+            raise RuntimeError('RLE record with length {0} is too large for the IPS format. RLE records must be less than 65536 bytes.'.format(count))
         if len(data) != 1:
             raise RuntimeError('Data for RLE record must be exactly one byte! Received {0}.'.format(data))
 
