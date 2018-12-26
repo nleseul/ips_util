@@ -44,8 +44,8 @@ from ips_util import Patch
 def this_is_my_patch():
   patch = Patch()
   
-  patch.add_record(0x1234, 0xff)              # Max out some stat
-  patch.add_rle_record(0x5678, b'\xea', 0x10) # NOP out a bunch of code
+  patch.add_record(0x1234, 999.to_bytes(2, byteorder='little')) # Max out some stat
+  patch.add_rle_record(0x5678, b'\xea', 0x10)                   # NOP out a bunch of code
   
   with open('gavroche.ips', 'w+b') as f:
     f.write(patch.encode())
@@ -63,3 +63,7 @@ def dude_wheres_my_patch():
     with open('some_patched_data.smc', 'w+b') as f_out:
       f_out.write(patch.apply(f_in.read()))
 ```
+
+## License
+
+Copy[right|left] is dumb and oppressive. So just do whatevs; I don't care. 
